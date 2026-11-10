@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from zoneinfo import ZoneInfo
 
 # Konfigurasi Halaman Streamlit (Wide mode)
 st.set_page_config(
@@ -11,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS untuk Tampilan Futuristik, Menawan, & Latar Pemandangan Indah
+# Custom CSS untuk Tampilan Futuristik & Memperbaiki Jarak Atas agar Tidak Tertutup Header
 st.markdown("""
     <style>
     .stApp {
@@ -23,25 +24,15 @@ st.markdown("""
         color: #f8fafc;
     }
     
+    /* Memberikan jarak atas yang cukup agar konten tidak tertutup header Streamlit */
     .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 1.5rem;
+        padding-top: 3.5rem;
+        padding-bottom: 2rem;
     }
     
     /* Warna Teks Futuristik */
     h1, h2, h3, p, span, label {
         color: #f8fafc !important;
-    }
-    
-    /* Kartu Metrik Glassmorphism */
-    .metric-card {
-        background: rgba(30, 41, 59, 0.75);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-        padding: 12px;
-        border-radius: 12px;
-        text-align: center;
-        box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
-        backdrop-filter: blur(8px);
     }
     
     /* Styling Header Tabel */
@@ -95,16 +86,14 @@ ihsg_price, ihsg_change = get_ihsg_data()
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.markdown(f"""
-        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px 18px; border-radius: 10px; border: 1px solid rgba(56,189,248,0.3); display: flex; align-items: center; font-size: 15px; box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);">
+        <div style="background: rgba(15, 23, 42, 0.85); padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(56,189,248,0.4); display: flex; align-items: center; font-size: 15px; box-shadow: 0 0 15px rgba(56, 189, 248, 0.25);">
             <div><b>📊 IHSG Market:</b> <span style="color: #fff; font-weight: bold;">{ihsg_price:,.2f}</span></div>
             <div style="margin-left: 20px; color: {'#10b981' if ihsg_change >= 0 else '#ef4444'}; font-weight: bold;">{'+' if ihsg_change >= 0 else ''}{ihsg_change:.2f}%</div>
         </div>
     """, unsafe_allow_html=True)
 
 with col_h2:
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    waktu_wib = datetime.now(ZoneInfo("Asia/Jakarta"))
+    waktu_wib = datetime.datetime.now(ZoneInfo("Asia/Jakarta"))
     waktu_str = waktu_wib.strftime("%d %b %Y | %H:%M WIB")
     st.markdown(f'<div style="text-align: right;"><span class="clock-box">🕒 {waktu_str}</span></div>', unsafe_allow_html=True)
 
@@ -118,7 +107,6 @@ st.markdown("""
 st.sidebar.header("🧭 Navigasi Menu")
 menu = st.sidebar.radio("Pilih Menu:", ["🌐 Semua Saham & Screener", "📈 Chart & Analisis Detail", "🧮 Kalkulator Saham Pro"])
 
-# Daftar Emiten JII70
 jii70_codes = [
     "AADI", "ACES", "ADMR", "ADRO", "AKRA", "ANTM", "ARCI", "AVIA", "BKSL", "BRIS", 
     "BRMS", "BSDE", "BTPS", "BUMI", "CMRY", "CPIN", "CTRA", "DEWA", "DKFT", "DSNG", 
@@ -154,7 +142,6 @@ if menu == "🌐 Semua Saham & Screener":
                 prev = df_stock.iloc[-2]
                 
                 close_price = float(latest['Close'])
-                open_price = float(latest['Open'])
                 high_price = float(latest['High'])
                 low_price = float(latest['Low'])
                 prev_close = float(prev['Close'])
@@ -164,7 +151,6 @@ if menu == "🌐 Semua Saham & Screener":
                 change_pct = ((close_price - prev_close) / prev_close) * 100
                 val_transaksi = (close_price * volume) / 1e9
                 
-                # Logika Penentuan Rekomendasi
                 pivot = (high_price + low_price + close_price) / 3
                 support = (2 * pivot) - high_price
                 resist = (2 * pivot) - low_price
@@ -206,13 +192,12 @@ if menu == "🌐 Semua Saham & Screener":
         if not df_all.empty:
             st.dataframe(df_all, use_container_width=True, hide_index=True)
             
-            # Tombol Download CSV
             csv_data = df_all.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Export Data ke CSV",
                 data=csv_data,
                 file_name="jii70_semua_saham_rekomendasi.csv",
-                mime="text/css"
+                mime="text/csv"
             )
         else:
             st.warning("Data emiten tidak tersedia saat ini.")
@@ -230,33 +215,28 @@ elif menu == "📈 Chart & Analisis Detail":
                 if isinstance(df_3m.columns, pd.MultiIndex):
                     df_3m.columns = df_3m.columns.get_level_values(0)
                 
-                # Bollinger Bands
                 df_3m['BB_Middle'] = df_3m['Close'].rolling(window=20).mean()
                 df_3m['BB_Std'] = df_3m['Close'].rolling(window=20).std()
                 df_3m['BB_Upper'] = df_3m['BB_Middle'] + (df_3m['BB_Std'] * 2)
                 df_3m['BB_Lower'] = df_3m['BB_Middle'] - (df_3m['BB_Std'] * 2)
                 
-                # MACD
                 exp1 = df_3m['Close'].ewm(span=12, adjust=False).mean()
                 exp2 = df_3m['Close'].ewm(span=26, adjust=False).mean()
                 df_3m['MACD'] = exp1 - exp2
                 df_3m['MACD_Signal'] = df_3m['MACD'].ewm(span=9, adjust=False).mean()
                 df_3m['MACD_Hist'] = df_3m['MACD'] - df_3m['MACD_Signal']
                 
-                # Stochastic
                 low_14 = df_3m['Low'].rolling(window=14).min()
                 high_14 = df_3m['High'].rolling(window=14).max()
                 df_3m['Stoch_K'] = 100 * ((df_3m['Close'] - low_14) / (high_14 - low_14))
                 df_3m['Stoch_D'] = df_3m['Stoch_K'].rolling(window=3).mean()
 
-                # RSI (14)
                 delta = df_3m['Close'].diff()
                 gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
                 loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
                 rs = gain / loss
                 df_3m['RSI'] = 100 - (100 / (1 + rs))
 
-                # Plotly Subplots
                 fig = make_subplots(
                     rows=5, cols=1, shared_xaxes=True,
                     vertical_spacing=0.02,
@@ -308,7 +288,6 @@ elif menu == "🧮 Kalkulator Saham Pro":
         calc_sell = st.number_input("Harga Jual (Rp)", min_value=1, value=1050, step=10)
         fee_sell_pct = st.number_input("Fee Jual (%)", min_value=0.0, value=0.25, step=0.01)
 
-    # Kalkulasi Finansial Akurat
     total_lembar = calc_lot * 100
     gross_buy = total_lembar * calc_buy
     fee_buy_nominal = gross_buy * (fee_buy_pct / 100)
