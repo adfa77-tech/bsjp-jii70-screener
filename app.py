@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS untuk Tampilan Futuristik & Memperbaiki Jarak Atas agar Tidak Tertutup Header
+# Custom CSS untuk Tampilan Futuristik, Padding Atas Aman, & Angka Warna-Warni
 st.markdown("""
     <style>
     .stApp {
@@ -24,9 +24,9 @@ st.markdown("""
         color: #f8fafc;
     }
     
-    /* Memberikan jarak atas yang cukup agar konten tidak tertutup header Streamlit */
+    /* Menambah jarak atas agar tidak tertutup header Streamlit */
     .block-container {
-        padding-top: 3.5rem;
+        padding-top: 4rem;
         padding-bottom: 2rem;
     }
     
@@ -183,16 +183,45 @@ if menu == "🌐 Semua Saham & Screener":
                     "Alasan": alasan,
                     "Harga Beli": f"Rp {harga_beli:,}",
                     "Harga Jual": f"Rp {harga_jual:,}",
-                    "Waktu Jual": waktu_jual
+                    "Waktu Jual": waktu_jual,
+                    "raw_chg": change_pct # Nilai mentah untuk logika warna
                 })
             except Exception:
                 continue
                 
         df_all = pd.DataFrame(all_results)
         if not df_all.empty:
-            st.dataframe(df_all, use_container_width=True, hide_index=True)
             
-            csv_data = df_all.to_csv(index=False).encode('utf-8')
+            # Fungsi Pewarnaan Angka Warna-Warni Dinamis
+            def color_dynamic(row):
+                chg = row.get('raw_chg', 0)
+                if chg > 0:
+                    chg_style = 'background-color: rgba(20, 83, 45, 0.85); color: #4ade80; font-weight: bold;'
+                elif chg < 0:
+                    chg_style = 'background-color: rgba(127, 29, 29, 0.85); color: #f87171; font-weight: bold;'
+                else:
+                    chg_style = 'background-color: rgba(30, 41, 59, 0.85); color: #cbd5e1; font-weight: bold;'
+                
+                return [
+                    'background-color: rgba(15, 23, 42, 0.9); color: #38bdf8; font-weight: bold;', # Kode
+                    'background-color: rgba(20, 83, 45, 0.85); color: #6ee7b7; font-weight: bold;', # Close
+                    chg_style, # Chg%
+                    'background-color: rgba(30, 27, 75, 0.85); color: #818cf8;', # Val
+                    'background-color: rgba(49, 46, 129, 0.85); color: #c084fc; font-weight: bold;', # Rekomendasi
+                    'background-color: rgba(15, 23, 42, 0.85); color: #e2e8f0;', # Alasan
+                    'background-color: rgba(6, 78, 59, 0.85); color: #34d399; font-weight: bold;', # Harga Beli
+                    'background-color: rgba(88, 28, 135, 0.85); color: #f472b6; font-weight: bold;', # Harga Jual
+                    'background-color: rgba(30, 41, 59, 0.85); color: #38bdf8;', # Waktu Jual
+                    '' # raw_chg disembunyikan / diabaikan dari styling visual utama
+                ]
+
+            # Drop kolom raw_chg untuk tampilan tabel bersih namun gunakan nilainya untuk styling
+            display_df = df_all.drop(columns=['raw_chg'])
+            styled_df = df_all.style.apply(color_dynamic, axis=1)
+
+            st.dataframe(styled_df, use_container_width=True, height=520)
+            
+            csv_data = display_df.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Export Data ke CSV",
                 data=csv_data,
