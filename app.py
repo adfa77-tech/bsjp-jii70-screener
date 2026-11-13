@@ -12,7 +12,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS untuk Tampilan Futuristik, Padding Atas Aman, & Angka Warna-Warni
+# Custom CSS untuk Tampilan Futuristik & Kartu Metrik Interaktif
 st.markdown("""
     <style>
     .stApp {
@@ -26,7 +26,7 @@ st.markdown("""
     
     /* Menambah jarak atas agar tidak tertutup header Streamlit */
     .block-container {
-        padding-top: 4rem;
+        padding-top: 3rem;
         padding-bottom: 2rem;
     }
     
@@ -103,9 +103,16 @@ st.markdown("""
     </h1>
 """, unsafe_allow_html=True)
 
-# --- SIDEBAR NAVIGASI & MENU ---
-st.sidebar.header("🧭 Navigasi Menu")
-menu = st.sidebar.radio("Pilih Menu:", ["🌐 Semua Saham & Screener", "📈 Chart & Analisis Detail", "🧮 Kalkulator Saham Pro"])
+# --- NAVIGASI UTAMA DI HALAMAN UTAMA (PINDAHAN DARI SIDEBAR) ---
+st.markdown("### 🧭 Navigasi Menu Utama")
+menu = st.radio(
+    "Pilih Menu:", 
+    ["🌐 Semua Saham & Screener", "📈 Chart & Analisis Detail", "🧮 Kalkulator Saham Pro"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
+st.markdown("<hr style='margin: 10px 0 20px 0; border-color: rgba(56,189,248,0.2);'>", unsafe_allow_html=True)
 
 jii70_codes = [
     "AADI", "ACES", "ADMR", "ADRO", "AKRA", "ANTM", "ARCI", "AVIA", "BKSL", "BRIS", 
@@ -116,6 +123,10 @@ jii70_codes = [
     "MYOR", "PGAS", "PTBA", "RAJA", "RATU", "SIDO", "SMGR", "SMRA", "SRTG", "SSIA", 
     "TAPG", "TCPI", "TINS", "TKIM", "TLKM", "TOBA", "TPIA", "UNTR", "UNVR", "WIFI"
 ]
+
+# Inisialisasi session state untuk filter kotak metrik
+if 'filter_mode' not in st.session_state:
+    st.session_state.filter_mode = "Semua"
 
 # ================= MENU 1: SEMUA SAHAM & REKOMENDASI =================
 if menu == "🌐 Semua Saham & Screener":
@@ -130,6 +141,10 @@ if menu == "🌐 Semua Saham & Screener":
             st.stop()
             
         all_results = []
+        saham_naik_count = 0
+        saham_turun_count = 0
+        rekomendasi_buy_count = 0
+
         for code in jii70_codes:
             ticker_symbol = f"{code}.JK"
             try:
@@ -155,18 +170,26 @@ if menu == "🌐 Semua Saham & Screener":
                 support = (2 * pivot) - high_price
                 resist = (2 * pivot) - low_price
                 
+                # Hitung statistik pergerakan
+                if change_pct > 0:
+                    saham_naik_count += 1
+                elif change_pct < 0:
+                    saham_turun_count += 1
+
                 if close_price > ma20_val and change_pct > 1.5:
                     rekomendasi = "Saham Scalping / Momentum"
                     alasan = "Harga di atas MA20 dengan lonjakan persentase positif harian."
                     harga_beli = int(close_price)
                     harga_jual = int(resist)
                     waktu_jual = "Sesi 2 / Hari Ini"
+                    rekomendasi_buy_count += 1
                 elif close_price <= support * 1.01:
                     rekomendasi = "Saham BOW (Buy on Weakness)"
                     alasan = "Harga mendekati area support kuat dengan potensi pantulan."
                     harga_beli = int(support)
                     harga_jual = int(pivot)
                     waktu_jual = "1-3 Hari ke Depan"
+                    rekomendasi_buy_count += 1
                 else:
                     rekomendasi = "Konsolidasi / Swing"
                     alasan = "Pergerakan harga stabil dalam rentang wajar."
@@ -184,15 +207,43 @@ if menu == "🌐 Semua Saham & Screener":
                     "Harga Beli": f"Rp {harga_beli:,}",
                     "Harga Jual": f"Rp {harga_jual:,}",
                     "Waktu Jual": waktu_jual,
-                    "raw_chg": change_pct # Nilai mentah untuk logika warna
+                    "raw_chg": change_pct
                 })
             except Exception:
                 continue
                 
         df_all = pd.DataFrame(all_results)
+        total_emiten_count = len(df_all)
+
         if not df_all.empty:
+            # --- KOTAK METRIK INTERAKTIF ---
+            mcol1, mcol2, mcol3, mcol4 = st.columns(4)
             
-            # Fungsi Pewarnaan Angka Warna-Warni Dinamis
+            with mcol1:
+                if st.button(f"📊 Total Emiten\n\n{total_emiten_count}", use_container_width=True):
+                    st.session_state.filter_mode = "Semua"
+            with mcol2:
+                if st.button(f"🚀 Saham Naik\n\n{saham_naik_count}", use_container_width=True):
+                    st.session_state.filter_mode = "Naik"
+            with mcol3:
+                if st.button(f"🔻 Saham Turun\n\n{saham_turun_count}", use_container_width=True):
+                    st.session_state.filter_mode = "Turun"
+            with mcol4:
+                if st.button(f"🎯 Rekomendasi Buy\n\n{rekomendasi_buy_count}", use_container_width=True):
+                    st.session_state.filter_mode = "Buy"
+
+            st.markdown(f"<p style='text-align: center; color: #38bdf8; font-size: 0.85rem; margin-top: 5px;'>Filter Aktif: <b>{st.session_state.filter_mode}</b></p>", unsafe_allow_html=True)
+
+            # Terapkan Filter Berdasarkan Tombol Kotak yang Diklik
+            filtered_df = df_all.copy()
+            if st.session_state.filter_mode == "Naik":
+                filtered_df = filtered_df[filtered_df['raw_chg'] > 0]
+            elif st.session_state.filter_mode == "Turun":
+                filtered_df = filtered_df[filtered_df['raw_chg'] < 0]
+            elif st.session_state.filter_mode == "Buy":
+                filtered_df = filtered_df[filtered_df['Rekomendasi'].str.contains("Scalping|BOW", case=False, na=False)]
+
+            # Fungsi Pewarnaan Dinamis
             def color_dynamic(row):
                 chg = row.get('raw_chg', 0)
                 if chg > 0:
@@ -203,21 +254,20 @@ if menu == "🌐 Semua Saham & Screener":
                     chg_style = 'background-color: rgba(30, 41, 59, 0.85); color: #cbd5e1; font-weight: bold;'
                 
                 return [
-                    'background-color: rgba(15, 23, 42, 0.9); color: #38bdf8; font-weight: bold;', # Kode
-                    'background-color: rgba(20, 83, 45, 0.85); color: #6ee7b7; font-weight: bold;', # Close
-                    chg_style, # Chg%
-                    'background-color: rgba(30, 27, 75, 0.85); color: #818cf8;', # Val
-                    'background-color: rgba(49, 46, 129, 0.85); color: #c084fc; font-weight: bold;', # Rekomendasi
-                    'background-color: rgba(15, 23, 42, 0.85); color: #e2e8f0;', # Alasan
-                    'background-color: rgba(6, 78, 59, 0.85); color: #34d399; font-weight: bold;', # Harga Beli
-                    'background-color: rgba(88, 28, 135, 0.85); color: #f472b6; font-weight: bold;', # Harga Jual
-                    'background-color: rgba(30, 41, 59, 0.85); color: #38bdf8;', # Waktu Jual
-                    '' # raw_chg disembunyikan / diabaikan dari styling visual utama
+                    'background-color: rgba(15, 23, 42, 0.9); color: #38bdf8; font-weight: bold;',
+                    'background-color: rgba(20, 83, 45, 0.85); color: #6ee7b7; font-weight: bold;',
+                    chg_style,
+                    'background-color: rgba(30, 27, 75, 0.85); color: #818cf8;',
+                    'background-color: rgba(49, 46, 129, 0.85); color: #c084fc; font-weight: bold;',
+                    'background-color: rgba(15, 23, 42, 0.85); color: #e2e8f0;',
+                    'background-color: rgba(6, 78, 59, 0.85); color: #34d399; font-weight: bold;',
+                    'background-color: rgba(88, 28, 135, 0.85); color: #f472b6; font-weight: bold;',
+                    'background-color: rgba(30, 41, 59, 0.85); color: #38bdf8;',
+                    ''
                 ]
 
-            # Drop kolom raw_chg untuk tampilan tabel bersih namun gunakan nilainya untuk styling
-            display_df = df_all.drop(columns=['raw_chg'])
-            styled_df = df_all.style.apply(color_dynamic, axis=1)
+            display_df = filtered_df.drop(columns=['raw_chg'])
+            styled_df = filtered_df.style.apply(color_dynamic, axis=1)
 
             st.dataframe(styled_df, use_container_width=True, height=520)
             
